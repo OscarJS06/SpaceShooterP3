@@ -1,3 +1,8 @@
+const NIVELES = [
+  {nivel: 1, puntosNecesarios: 300, velocidadEnemigo: 150, spawnTime: 1000},
+  {nivel: 2, puntosNecesarios: 2000, velocidadEnemigo: 250, spawnTime: 700},
+   {nivel: 2, puntosNecesarios: 3000, velocidadEnemigo: 450, spawnTime: 300}
+]
 export class GameScene extends Phaser.Scene {
   constructor() {
     super({ key: 'GameScene' });
@@ -29,16 +34,22 @@ export class GameScene extends Phaser.Scene {
       defaultKey: 'enemigo',
       maxSize: 30
     })
-    this.time.addEvent({
-      delay: 1000,
-      callback: this.generarEnemigo,
-      callbackScope: this,
-      loop: true
+    
+    this.score = 0;
+    this.scoreText = this.add.text(16, 16, 'Puntos: 0', { fontSize: '32px', fill: '#fff' });
+
+    this.levelText = this.add.text(this.scale.width - 100, 16, 'Nivel: 1', {
+      fontSize: '32px',
+      fill: '#fff',
+      fontFamily: 'Arial'
     });
+    this.nivelActual = 0;
+    this.iniciarNivel();
 
     //colisiones
     this.physics.add.overlap(this.balas, this.enemigos, this.destruirEnemigo, null, this);
     this.physics.add.overlap(this.player, this.enemigos, this.gameOver, null, this);
+
   }
 
   update(){
@@ -90,16 +101,22 @@ export class GameScene extends Phaser.Scene {
       enemigo.setVisible(true);
       enemigo.body.enable = true;
 
-      enemigo.setVelocityY(150);
+      const velocidad = NIVELES[this.nivelActual].velocidadEnemigo;
+      enemigo.setVelocityY(velocidad);
     }
   }
 
   destruirEnemigo(bala, enemigo){
-      this.balas.killAndHide(bala);
-      bala.body.enable = false;
+    this.balas.killAndHide(bala);
+    bala.body.enable = false;
 
-      this.enemigos.killAndHide(enemigo);
-      enemigo.body.enable = false;
+    this.enemigos.killAndHide(enemigo);
+    enemigo.body.enable = false;
+
+    this.score += 100;
+    this.scoreText.setText('Puntos: ' + this.score);
+
+    this.verificarSubidaNivel();
   }
 
   gameOver(player, enemigo){
@@ -111,5 +128,47 @@ export class GameScene extends Phaser.Scene {
       fill: '#fff',
       fontFamily: 'Arial'
     }).setOrigin(0.5);
+
+    this.add.text(this.scale.width / 2, (this.scale.height / 2) + 50, 'Puntos Totales: ' + this.score, {
+      fontSize: '32px',
+      fill: '#ffff00',
+      fontFamily: 'Arial'
+    }).setOrigin(0.5);
+
+    const restartButton = this.add.text(this.scale.width / 2, (this.scale.height / 2) + 120, 'CLIC PARA REINICIAR', {
+      fontSize: '28px',
+      fill: '#0f0', 
+      backgroundColor: '#000000' 
+    }).setOrigin(0.5);
+
+    restartButton.setInteractive();
+    restartButton.on('pointerdown', ()=>{
+      this.scene.restart();
+    })
   }
+
+  iniciarNivel(){
+    const config = NIVELES[this.nivelActual];
+    if(this.spawnEvent){
+      this.spawnEvent.remove();
+    }
+    this.spawnEvent = this.time.addEvent({
+      delay: config.spawnTime,
+      callback: this.generarEnemigo,
+      callbackScope: this,
+      loop: true
+    });
+  }
+  
+  verificarSubidaNivel() {
+        const config = NIVELES[this.nivelActual];
+        
+        if (this.score >= config.puntosNecesarios && this.nivelActual < NIVELES.length - 1) {
+            this.nivelActual++;
+            this.iniciarNivel(); 
+            
+            this.levelText.setText('Nivel: ' + NIVELES[this.nivelActual].nivel);
+            
+        }
+    }
 }
