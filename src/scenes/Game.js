@@ -1,7 +1,9 @@
 const NIVELES = [
-  {nivel: 1, puntosNecesarios: 300, velocidadEnemigo: 150, spawnTime: 1000},
-  {nivel: 2, puntosNecesarios: 2000, velocidadEnemigo: 250, spawnTime: 700},
-   {nivel: 2, puntosNecesarios: 3000, velocidadEnemigo: 450, spawnTime: 300}
+  {nivel: 1, puntosNecesarios: 300, velocidadEnemigo: 150, spawnTime: 1000, probTanque: 0},
+  {nivel: 2, puntosNecesarios: 2000, velocidadEnemigo: 250, spawnTime: 700, probTanque: 0.1},
+  {nivel: 3, puntosNecesarios: 3000, velocidadEnemigo: 450, spawnTime: 300, probTanque: 0.5}
+  //{nivel: 4, puntosNecesarios: 3000, velocidadEnemigo: 450, spawnTime: 300, probTanque: 0.5},
+  //{nivel: 5, puntosNecesarios: 3000, velocidadEnemigo: 450, spawnTime: 300, probTanque: 0.5}
 ]
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -12,6 +14,9 @@ export class GameScene extends Phaser.Scene {
     this.load.image('nave','assets/nave.png');
     this.load.image('bala','assets/bala.png');
     this.load.image('enemigo','assets/enemigo.png');
+    this.load.image('tanque','assets/tanque.png');
+    this.load.image('pw_1','assets/powerup1.png');
+    this.load.image('pw_2','assets/powerup2.png');
 
   }
 
@@ -32,24 +37,37 @@ export class GameScene extends Phaser.Scene {
     //enemigos
     this.enemigos = this.physics.add.group({
       defaultKey: 'enemigo',
-      maxSize: 30
+      maxSize: 10
     })
     
     this.score = 0;
-    this.scoreText = this.add.text(16, 16, 'Puntos: 0', { fontSize: '32px', fill: '#fff' });
+    this.scoreText = this.add.text(16, 16, 'Puntos: 0', { fontSize: '32px', fill: '#869cf1ff', fontFamily: 'Arial' });
+    this.scoreText.setDepth(10);
 
-    this.levelText = this.add.text(this.scale.width - 100, 16, 'Nivel: 1', {
+    this.levelText = this.add.text(this.scale.width - 120, 16, 'Nivel: 1', {
       fontSize: '32px',
-      fill: '#fff',
+      fill: '#b882f6ff',
       fontFamily: 'Arial'
     });
+    this.levelText.setDepth(10);
     this.nivelActual = 0;
     this.iniciarNivel();
 
     //colisiones
     this.physics.add.overlap(this.balas, this.enemigos, this.destruirEnemigo, null, this);
-    this.physics.add.overlap(this.player, this.enemigos, this.gameOver, null, this);
+    this.physics.add.overlap(this.player, this.enemigos, this.dañarJugador, null, this);
+    this.physics.add.overlap(this.player, this.pw_1, this.recogerPW, null, this);
+    this.physics.add.overlap(this.player, this.pw_2, this.recogerPW, null, this);
+    //vidas
+    this.vidas= 3;
+    this.esInvencible= false;
 
+    this.vidasText = this.add.text(16, 50, 'Vidas: 3',{
+      fontSize: '32px',
+      fill: '#f44c4cff',
+      fontFamily: 'Arial'
+    });
+    this-this.vidasText.setDepth(10);
   }
 
   update(){
@@ -74,7 +92,7 @@ export class GameScene extends Phaser.Scene {
       }
     })
     this.enemigos.children.iterate((enemigo)=>{
-      if(enemigo.active && enemigo.y > 650){ //altura pantalla
+      if(enemigo.active && enemigo.y > 650){
         this.enemigos.killAndHide(enemigo);
         enemigo.body.enable = false;
       }
@@ -101,23 +119,52 @@ export class GameScene extends Phaser.Scene {
       enemigo.setVisible(true);
       enemigo.body.enable = true;
 
-      const velocidad = NIVELES[this.nivelActual].velocidadEnemigo;
-      enemigo.setVelocityY(velocidad);
+      const nivelData = NIVELES[this.nivelActual];
+      const esTanque = Math.random() < nivelData.probTanque;
+
+      if (esTanque) { //tanque
+                enemigo.setTexture('tanque'); 
+                enemigo.setScale(1.5);         
+                enemigo.vida = 3;              
+                enemigo.setVelocityY(nivelData.velocidadEnemigo * 0.5);
+            } else {
+                // basico
+                enemigo.setTexture('enemigo');         
+                enemigo.setScale(1);           
+                enemigo.vida = 1;              
+                enemigo.setVelocityY(nivelData.velocidadEnemigo);
+            }
+        }
     }
-  }
 
-  destruirEnemigo(bala, enemigo){
-    this.balas.killAndHide(bala);
-    bala.body.enable = false;
+  destruirEnemigo(bala, enemigo) {
+        this.balas.killAndHide(bala);
+        bala.body.enable = false;
 
-    this.enemigos.killAndHide(enemigo);
-    enemigo.body.enable = false;
+        if (!enemigo.vida) enemigo.vida = 1; 
+        
+        enemigo.vida--;
 
-    this.score += 100;
-    this.scoreText.setText('Puntos: ' + this.score);
+        
+        enemigo.setTint(0xffffff); 
+        this.time.delayedCall(100, () => {
+             if (enemigo.active) {
+                 enemigo.vida > 1 ? enemigo.setTint(0xff0000) : enemigo.clearTint();
+             }
+        });
 
-    this.verificarSubidaNivel();
-  }
+        if (enemigo.vida <= 0) {
+            this.enemigos.killAndHide(enemigo);
+            enemigo.body.enable = false;
+
+            const puntosGanados = (enemigo.scale > 1.2) ? 300 : 100;
+            
+            this.score += puntosGanados;
+            this.scoreText.setText('Puntos: ' + this.score);
+
+            this.verificarSubidaNivel();
+        }
+    }
 
   gameOver(player, enemigo){
     this.physics.pause();
@@ -167,8 +214,40 @@ export class GameScene extends Phaser.Scene {
             this.nivelActual++;
             this.iniciarNivel(); 
             
-            this.levelText.setText('Nivel: ' + NIVELES[this.nivelActual].nivel);
+            this.levelText.setText('Nivel:' + NIVELES[this.nivelActual].nivel);
             
         }
+    }
+
+    dañarJugador(player, enemigo){
+      if(this.esInvencible)return;
+      this.enemigos.killAndHide(enemigo);
+      enemigo.body.enable = false;
+
+      this.vidas--;
+      this.vidasText.setText('Vidas: '+ this.vidas);
+
+      this.cameras.main.shake(200, 0.01);
+      player.setTint(0xff0000);
+
+      if(this.vidas <= 0){
+        this.gameOver(player);
+      }
+      else{
+        this.esInvencible = true;
+
+        this.tweens.add({
+                targets: player,
+                alpha: 0.1, 
+                duration: 100,
+                yoyo: true,
+                repeat: 5, 
+                onComplete: () => {
+                    player.clearTint(); 
+                    player.alpha = 1;   
+                    this.esInvencible = false; 
+                }
+            });
+      }
     }
 }
