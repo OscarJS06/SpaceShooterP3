@@ -1,7 +1,11 @@
 const NIVELES = [
-  { nivel: 1, puntosNecesarios: 300, velocidadEnemigo: 150, spawnTime: 1000, probTanque: 0, timePW: 1000 },
-  { nivel: 2, puntosNecesarios: 2000, velocidadEnemigo: 250, spawnTime: 700, probTanque: 0.1, timePW: 10000 },
-  { nivel: 3, puntosNecesarios: 3000, velocidadEnemigo: 450, spawnTime: 300, probTanque: 0.5, timePW: 5000 }
+  { nivel: 1, puntosNecesarios: 1000, velocidadEnemigo: 150, spawnTime: 1000, probTanque: 0, timePW: 0 },
+  { nivel: 2, puntosNecesarios: 2000, velocidadEnemigo: 150, spawnTime: 2000, probTanque: 1, timePW: 0 },
+  { nivel: 3, puntosNecesarios: 4000, velocidadEnemigo: 200, spawnTime: 700, probTanque: 0.1, timePW: 10000 },
+  { nivel: 4, puntosNecesarios: 6000, velocidadEnemigo: 300, spawnTime: 300, probTanque: 0.2, timePW: 7000 },
+  { nivel: 5, puntosNecesarios: 8000, velocidadEnemigo: 450, spawnTime: 250, probTanque: 0.3, timePW: 5000 },
+  { nivel: 6, puntosNecesarios: 12000, velocidadEnemigo: 600, spawnTime: 200, probTanque: 0.5, timePW: 5000 },
+  { nivel: 7, puntosNecesarios: 200000, velocidadEnemigo: 9000, spawnTime: 100, probTanque: 0.6, timePW: 5000 }
 ];
 
 export class GameScene extends Phaser.Scene {
@@ -11,12 +15,20 @@ export class GameScene extends Phaser.Scene {
 
   preload(){
     this.load.image('nave','assets/nave.png');
-    this.load.image('bala','assets/bala.png'); // IMPORTANTE: Que esta imagen sea blanca para que los colores funcionen bien
+    this.load.image('bala','assets/bala.png'); 
     this.load.image('enemigo','assets/enemigo.png');
     this.load.image('tanque','assets/tanque.png');
     this.load.image('pw_1','assets/powerup1.png');  //vida
     this.load.image('pw_2','assets/powerup2.png');  //arma
+    
+    this.load.audio('sfx_disparo','assets/audio/laserShoot.wav');
+    this.load.audio('sfx_explosion','assets/audio/explosion.wav');
+    this.load.audio('sfx_PW','assets/audio/powerUp.wav');
+    this.load.audio('sfx_gameOver','assets/audio/gameOver.mp3');
+    this.load.audio('musica_fondo','assets/audio/musica.ogg');
+    this.load.audio('sfx_daño','assets/audio/hitHurt.wav');
   }
+
 
   create() {
     //personaje
@@ -28,7 +40,7 @@ export class GameScene extends Phaser.Scene {
     //balas
     this.balas = this.physics.add.group({
       defaultKey: 'bala',
-      maxSize: -1 // CAMBIO 1: Aumentado a 50 para que no falten balas en disparo doble
+      maxSize: -1 
     });
 
     //enemigos
@@ -42,13 +54,13 @@ export class GameScene extends Phaser.Scene {
     
     //puntuacion y niveles
     this.score = 0;
-    this.scoreText = this.add.text(16, 16, 'Puntos: 0', { fontSize: '32px', fill: '#869cf1', fontFamily: 'Arial' });
+    this.scoreText = this.add.text(16, 16, 'Puntos: 0', { fontSize: '32px', fill: '#869cf1', fontFamily: 'VT323' });
     this.scoreText.setDepth(10);
 
     this.levelText = this.add.text(this.scale.width - 120, 16, 'Nivel: 1', {
       fontSize: '32px',
       fill: '#b882f6',
-      fontFamily: 'Arial'
+      fontFamily: 'VT323'
     });
     this.levelText.setDepth(10);
 
@@ -60,10 +72,10 @@ export class GameScene extends Phaser.Scene {
     this.esInvencible= false;
     this.vidasText = this.add.text(16, 50, 'Vidas: 3',{
       fontSize: '32px',
-      fill: '#f44c4c',
-      fontFamily: 'Arial'
+      fill: '#36f59cff',
+      fontFamily: 'VT323'
     });
-    // CAMBIO 2: Corregido el error de escritura "this-this"
+  
     this.vidasText.setDepth(10);
 
     //colisiones
@@ -72,9 +84,40 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.powerups, this.recogerPW, null, this);
         
     this.nivelArma = 1;
+
+    //musica
+    this.musica = this.sound.add('musica_fondo');
+    const musicConfig = {
+      volume: 0.3,
+      loop: true
+    };
+
+    if(!this.sound.locked){
+      this.musica.play(musicConfig);
+    }
+    else{
+      this.input.once('pointerdown',()=>{
+        this.musica.play(musicConfig.play(musicConfig));
+      });
+    }
+    //pausa
+    this.keyP = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
+    this.isPaused = false;
+    this.pauseText = this.add.text(this.scale.width / 2, this.scale.height / 2, 'JUEGO PAUSADO', {
+        fontSize: '58px',
+        fill: '#51ed40ff',
+        backgroundColor: '#000000aa' // 
+    }).setOrigin(0.5).setDepth(20).setVisible(false);
   }
 
   update(){
+    //si esta pausado
+    if (Phaser.Input.Keyboard.JustDown(this.keyP)) {
+        this.togglePause();
+    }
+    if (this.isPaused) {
+        return; 
+    }
     //movimiento personaje
     if (this.cursors.left.isDown) {
       this.player.setVelocityX(-this.playerSpeed);
@@ -89,23 +132,18 @@ export class GameScene extends Phaser.Scene {
       this.disparar();
     }
     
-    // Limpieza Balas
     this.balas.children.iterate((bala)=>{
       if(bala && bala.active && bala.y < -10){
         this.balas.killAndHide(bala);
         bala.body.enable = false;
       }
     });
-
-    // Limpieza Enemigos
     this.enemigos.children.iterate((enemigo)=>{
       if(enemigo.active && enemigo.y > 650){
         this.enemigos.killAndHide(enemigo);
         enemigo.body.enable = false;
       }
     });
-    
-    // Limpieza PowerUps (agregado por seguridad)
     this.powerups.children.iterate((pw) => {
       if(pw){
         if (pw.active && pw.y > 650) {
@@ -115,39 +153,50 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  //funcion para disparar proyectiles
   disparar() {
+    //disparo doble
     if (this.nivelArma === 2) {
-        // --- DISPARO DOBLE ---
-        // Usamos 'create' para asegurar que SIEMPRE salgan, aunque gasten más memoria
         const bala1 = this.balas.create(this.player.x - 45, this.player.y - 20, 'bala');
         const bala2 = this.balas.create(this.player.x + 45, this.player.y - 20, 'bala');
         
         if (bala1) {
+            this.sound.play('sfx_disparo', { 
+                volume: 0.3, 
+                detune: Phaser.Math.Between(-200, 200)
+            });
             bala1.setVelocityY(-500);
             bala1.body.enable = true;
-            bala1.clearTint();      // Limpiamos color viejo
-            bala1.setTint(0xffff00); // Ponemos amarillo
+            bala1.clearTint();      
+            bala1.setTint(0xffff00); 
         }
 
         if (bala2) {
+          this.sound.play('sfx_disparo', { 
+                volume: 0.3, 
+                detune: Phaser.Math.Between(-200, 200) 
+            });
             bala2.setVelocityY(-500);
             bala2.body.enable = true;
             bala2.clearTint();
             bala2.setTint(0xffff00);
         }
-
+    //disparo normal
     } else {
-        // --- DISPARO NORMAL ---
         const bala = this.balas.create(this.player.x, this.player.y - 20, 'bala');
 
         if (bala) {
+            this.sound.play('sfx_disparo', { 
+                volume: 0.3, 
+                detune: Phaser.Math.Between(-200, 200) 
+            });
             bala.setVelocityY(-500);
             bala.body.enable = true;
-            bala.clearTint(); // Sin color para el disparo normal
+            bala.clearTint();
         }
     }
   }
-
+  //creamos los enemigos
   generarEnemigo(){
     const xRandom = Phaser.Math.Between(50, 400);
     const enemigo = this.enemigos.get(xRandom, -50);
@@ -157,7 +206,7 @@ export class GameScene extends Phaser.Scene {
       enemigo.setVisible(true);
       enemigo.body.enable = true;
 
-      enemigo.clearTint(); // Esto está bien, arregla el color rojo
+      enemigo.clearTint();
       enemigo.alpha = 1;
 
       const nivelData = NIVELES[this.nivelActual];
@@ -178,15 +227,12 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
+  //enemigos se quedan sin vida
   destruirEnemigo(bala, enemigo) {
     this.balas.killAndHide(bala);
     bala.body.enable = false;
-
-    // Gestión de vida
     if (!enemigo.vida) enemigo.vida = 1;
     enemigo.vida--;
-
-    // Visual tanque
     enemigo.setTint(0xff0000); 
 
     this.time.delayedCall(100, () => {
@@ -203,29 +249,41 @@ export class GameScene extends Phaser.Scene {
       this.score += puntosGanados;
       this.scoreText.setText('Puntos: ' + this.score);
       
+      this.sound.play('sfx_explosion');
+  
+    if (this.score >= 20000) {
+        this.physics.pause(); 
+        this.musica.stop();   
+        this.scene.start('VictoryScene'); 
+        return;
+    }
       this.verificarSubidaNivel();
     }
   }
 
+  //el jugador se queda sin vidas 
   gameOver(player, enemigo){
     this.physics.pause();
     player.setTint(0xff0000);
 
+    this.musica.stop();
+    this.sound.play('sfx_gameOver');
+
     this.add.text(this.scale.width/2, this.scale.height/2, 'GAME OVER',{
       fontSize: '48px',
-      fill: '#fff',
-      fontFamily: 'Arial'
+      fill: '#e12020ff',
+      fontFamily: 'VT323'
     }).setOrigin(0.5);
 
     this.add.text(this.scale.width / 2, (this.scale.height / 2) + 50, 'Puntos Totales: ' + this.score, {
       fontSize: '32px',
-      fill: '#ffff00',
-      fontFamily: 'Arial'
+      fill: '#9171f2ff',
+      fontFamily: 'VT323'
     }).setOrigin(0.5);
 
     const restartButton = this.add.text(this.scale.width / 2, (this.scale.height / 2) + 120, 'CLIC PARA REINICIAR', {
       fontSize: '28px',
-      fill: '#0f0', 
+      fill: 'rgba(0, 213, 255, 1)', 
       backgroundColor: '#000000' 
     }).setOrigin(0.5);
 
@@ -235,6 +293,7 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
+  //iniciamos niveles
   iniciarNivel() {
     const config = NIVELES[this.nivelActual];
 
@@ -257,19 +316,19 @@ export class GameScene extends Phaser.Scene {
       });
     }
   }
-  
+ 
+  // si la puntuación es la adecuada, subimos de nivel 
   verificarSubidaNivel() {
     const config = NIVELES[this.nivelActual];
     
     if (this.score >= config.puntosNecesarios && this.nivelActual < NIVELES.length - 1) {
         this.nivelActual++;
         this.iniciarNivel(); 
-        
         this.levelText.setText('Nivel:' + NIVELES[this.nivelActual].nivel);
-        
     }
   }
 
+  //dañamos el jugador, perdiendo vidas
   dañarJugador(player, enemigo){
     if(this.esInvencible)return;
     this.enemigos.killAndHide(enemigo);
@@ -285,6 +344,7 @@ export class GameScene extends Phaser.Scene {
       this.gameOver(player);
     }
     else{
+      this.sound.play('sfx_daño');
       this.esInvencible = true;
 
       this.tweens.add({
@@ -301,7 +361,8 @@ export class GameScene extends Phaser.Scene {
           });
     }
   }
-
+  
+  //cremaos los power ups
   generarPowerUp() {
     const xRandom = Phaser.Math.Between(50, this.scale.width - 50);
     const esVida = Math.random() < 0.5;
@@ -318,15 +379,18 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // qué ocurre cuando se recoge un power up
   recogerPW(player, item) {
       item.destroy(); 
-
+      this.sound.play('sfx_PW');
+      // +1 vida
       if (item.tipo === 'vida') {
           this.vidas++;
           this.vidasText.setText('Vidas: ' + this.vidas);
           player.setTint(0x00ff00);
           this.time.delayedCall(200, () => player.clearTint());
-      } 
+      }
+      // disparo doble
       else if (item.tipo === 'arma') {
           this.nivelArma = 2;
           player.setTint(0x00ffff);
@@ -336,5 +400,18 @@ export class GameScene extends Phaser.Scene {
               player.clearTint();
           });
       }
+  }
+  togglePause() {
+    this.isPaused = !this.isPaused;
+
+    if (this.isPaused) {
+        this.physics.pause();  
+        this.pauseText.setVisible(true);
+        this.musica.pause();   
+    } else {
+        this.physics.resume();    
+        this.pauseText.setVisible(false); 
+        this.musica.resume(); 
+    }
   }
 }

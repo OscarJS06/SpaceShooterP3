@@ -1,4 +1,8 @@
 import { GameScene } from './scenes/Game.js';
+import { MenuScene } from './scenes/Menu.js';
+import { CreditosScene } from './scenes/Credits.js';
+import { TutorialScene } from './scenes/TutorialScene.js';
+import { VictoryScene } from './scenes/Victoria.js';
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -9,7 +13,7 @@ const game = new Phaser.Game({
     width: 450,
     height: 640,
     autoCenter: Phaser.Scale.CENTER_BOTH,
-    mode: Phaser.Scale.HEIGHT_CONTROLS_WIDTH,
+    mode: Phaser.Scale.FIT,
   },
   backgroundColor: '#000000',
   physics: {
@@ -21,5 +25,10 @@ const game = new Phaser.Game({
   },
 });
 
+game.scene.add('MenuScene', MenuScene);
+game.scene.add('TutorialScene', TutorialScene);
+game.scene.add('CreditosScene', CreditosScene);
 game.scene.add('GameScene', GameScene);
-game.scene.start('GameScene');
+game.scene.add('VictoryScene',VictoryScene);
+
+game.scene.start('MenuScene');
